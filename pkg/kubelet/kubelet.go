@@ -372,6 +372,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	nodeLabels map[string]string,
 	nodeStatusMaxImages int32,
 	seccompDefault bool,
+	runSandboxQPS int32,
+	runSandboxBurst int32,
 ) (*Kubelet, error) {
 	ctx := context.Background()
 	logger := klog.TODO()
@@ -691,6 +693,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		*kubeCfg.MemoryThrottlingFactor,
 		kubeDeps.PodStartupLatencyTracker,
 		kubeDeps.TracerProvider,
+		float32(runSandboxQPS),
+		int(runSandboxBurst),
 	)
 	if err != nil {
 		return nil, err

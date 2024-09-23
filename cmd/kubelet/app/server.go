@@ -1325,7 +1325,8 @@ func createAndInitKubelet(kubeServer *options.KubeletServer,
 		kubeServer.RegisterSchedulable,
 		kubeServer.NodeLabels,
 		kubeServer.NodeStatusMaxImages,
-		kubeServer.KubeletFlags.SeccompDefault || kubeServer.KubeletConfiguration.SeccompDefault)
+		kubeServer.KubeletFlags.SeccompDefault || kubeServer.KubeletConfiguration.SeccompDefault,
+		kubeServer.RunSandboxQPS, kubeServer.RunSandboxBurst)
 	if err != nil {
 		return nil, err
 	}

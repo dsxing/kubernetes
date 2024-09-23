@@ -133,6 +133,14 @@ type KubeletFlags struct {
 	RegisterSchedulable bool
 	// SeccompDefault enables the use of `RuntimeDefault` as the default seccomp profile for all workloads on the node.
 	SeccompDefault bool
+
+	// RunSandboxQPS is the limit of run sandbox per second.
+	// Set to 0 for no limit.
+	RunSandboxQPS int32
+	// RunSandboxBurst is the maximum size of bursty to run sandbox, temporarily allows
+	// run sandbox to burst to this number, while still not exceeding RunSandboxQPS.
+	// Only used if RunSandboxQPS > 0.
+	RunSandboxBurst int32
 }
 
 // NewKubeletFlags will create a new KubeletFlags with default values
@@ -324,6 +332,9 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.MarkDeprecated("cloud-config", "will be removed in 1.25 or later, in favor of removing cloud provider code from Kubelet.")
 	fs.BoolVar(&f.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "experimental-allocatable-ignore-eviction", f.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "When set to 'true', Hard Eviction Thresholds will be ignored while calculating Node Allocatable. See https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/ for more details. [default=false]")
 	fs.MarkDeprecated("experimental-allocatable-ignore-eviction", "will be removed in 1.25 or later.")
+
+	fs.Int32Var(&f.RunSandboxQPS, "run-sandbox-qps", f.RunSandboxQPS, "If > 0, limit run sandbox QPS to this value.  If 0, unlimited.")
+	fs.Int32Var(&f.RunSandboxBurst, "run-sandbox-burst", f.RunSandboxBurst, "Maximum size of a bursty to run sandbox, temporarily allows run sandbox to burst to this number, while still not exceeding sandbox-qps. Only used if --sandbox-qps > 0")
 }
 
 // AddKubeletConfigFlags adds flags for a specific kubeletconfig.KubeletConfiguration to the specified FlagSet

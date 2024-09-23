@@ -171,6 +171,8 @@ type kubeGenericRuntimeManager struct {
 
 	// Root directory used to store pod logs
 	podLogsDirectory string
+
+	limiter flowcontrol.RateLimiter
 }
 
 // KubeGenericRuntime is a interface contains interfaces for container runtime and command.
@@ -213,7 +215,10 @@ func NewKubeGenericRuntimeManager(
 	memoryThrottlingFactor float64,
 	podPullingTimeRecorder images.ImagePodPullingTimeRecorder,
 	tracerProvider trace.TracerProvider,
+	runSandboxQPS float32,
+	runSandboxBurst int,
 ) (KubeGenericRuntime, error) {
+	klog.V(4).InfoS("Sandbox run params", "runSandboxQPS", runSandboxQPS, "runSandboxBurst", runSandboxBurst)
 	ctx := context.Background()
 	runtimeService = newInstrumentedRuntimeService(runtimeService)
 	imageService = newInstrumentedImageManagerService(imageService)
@@ -241,6 +246,7 @@ func NewKubeGenericRuntimeManager(
 		getNodeAllocatable:     getNodeAllocatable,
 		memoryThrottlingFactor: memoryThrottlingFactor,
 		podLogsDirectory:       podLogsDirectory,
+		limiter:                flowcontrol.NewTokenBucketRateLimiter(runSandboxQPS, runSandboxBurst),
 	}
 
 	typedVersion, err := kubeRuntimeManager.getTypedVersion(ctx)

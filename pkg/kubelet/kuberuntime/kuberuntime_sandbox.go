@@ -39,6 +39,11 @@ import (
 
 // createPodSandbox creates a pod sandbox and returns (podSandBoxID, message, error).
 func (m *kubeGenericRuntimeManager) createPodSandbox(ctx context.Context, pod *v1.Pod, attempt uint32) (string, string, error) {
+	if m.limiter.QPS() > 0.0 && !m.limiter.TryAccept() {
+		message := fmt.Sprintf("Sandbox QPS exceeded, failed to create pod sandbox config for pod: %v", klog.KObj(pod))
+		klog.Errorf("Sandbox QPS exceeded, failed to create pod sandbox config for pod: %v", klog.KObj(pod))
+		return "", message, fmt.Errorf("Sandbox QPS exceeded")
+	}
 	podSandboxConfig, err := m.generatePodSandboxConfig(pod, attempt)
 	if err != nil {
 		message := fmt.Sprintf("Failed to generate sandbox config for pod %q: %v", format.Pod(pod), err)
