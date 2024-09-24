@@ -119,6 +119,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/util/sliceutils"
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager"
 	httpprobe "k8s.io/kubernetes/pkg/probe/http"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeaffinity"
 	"k8s.io/kubernetes/pkg/security/apparmor"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/volume"
@@ -2302,7 +2303,12 @@ func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, strin
 	}
 	for _, podAdmitHandler := range kl.admitHandlers {
 		if result := podAdmitHandler.Admit(attrs); !result.Admit {
-
+			if result.Reason == nodeaffinity.Name && kl.ShouldRetainPod(pod) {
+				klog.V(2).InfoS("When the kubelet restarts, if a pod is already Running, "+
+					"Retain the pod even if it no longer satisfies node affinity",
+					"pod", klog.KObj(pod), "podUID", pod.UID)
+				continue
+			}
 			klog.InfoS("Pod admission denied", "podUID", attrs.Pod.UID, "pod", klog.KObj(attrs.Pod), "reason", result.Reason, "message", result.Message)
 
 			return false, result.Reason, result.Message
@@ -3075,4 +3081,8 @@ func (kl *Kubelet) warnCgroupV1Usage() {
 		klog.V(2).InfoS("Warning: cgroup v1", "message", cm.CgroupV1MaintenanceModeWarning)
 	}
 	metrics.CgroupVersion.Set(float64(cgroupVersion))
+}
+
+func (kl *Kubelet) ShouldRetainPod(pod *v1.Pod) bool {
+	return kl.IsPodRunning(pod) && IsPodLabeledRetain(pod)
 }

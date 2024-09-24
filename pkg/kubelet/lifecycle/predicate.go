@@ -29,6 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/scheduler"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeaffinity"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
 )
 
@@ -157,6 +158,9 @@ func (w *predicateAdmitHandler) Admit(attrs *PodAdmitAttributes) PodAdmitResult 
 		}
 		// If there are failed predicates, we only return the first one as a reason.
 		r := reasons[0]
+		if skipNodeAffinityFailureIfNecessary(admitPod, reasons) {
+			r = reasons[1]
+		}
 		switch re := r.(type) {
 		case *PredicateFailureError:
 			reason = re.PredicateName
@@ -311,4 +315,13 @@ func generalFilter(pod *v1.Pod, nodeInfo *schedulerframework.NodeInfo) []Predica
 	}
 
 	return reasons
+}
+
+func skipNodeAffinityFailureIfNecessary(pod *v1.Pod, reasons []PredicateFailureReason) bool {
+	if pod.Labels != nil && pod.Labels["pod.ccos.io/retain-running"] == "NodeAffinity" &&
+		len(reasons) > 1 && reasons[0].GetReason() == fmt.Sprintf("Predicate %s failed", nodeaffinity.Name) {
+		klog.Warningf("pod %v has retain label and not only predicate %s failed", klog.KObj(pod), nodeaffinity.Name)
+		return true
+	}
+	return false
 }

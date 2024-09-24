@@ -1320,6 +1320,11 @@ func (kl *Kubelet) HandlePodCleanups(ctx context.Context) error {
 		// but which were previously known are terminated by SyncKnownPods().
 		_, knownPod := workingPods[runningPod.ID]
 		if !knownPod {
+			// 如果从运行时获取的pod没在控制面etcd记录中，pod为空，直接使用造成空指针错误，先判空；
+			if allPodsByUID[runningPod.ID] != nil && kl.ShouldRetainPod(allPodsByUID[runningPod.ID]) {
+				klog.V(2).InfoS("Skip clean pod while pod has retain label", "podUID", runningPod.ID)
+				continue
+			}
 			one := int64(1)
 			killPodOptions := &KillPodOptions{
 				PodTerminationGracePeriodSecondsOverride: &one,
@@ -2539,4 +2544,42 @@ func resolveRecursiveReadOnly(m v1.VolumeMount, runtimeSupportsRRO bool) (bool, 
 	default:
 		return false, fmt.Errorf("unknown recursive read-only mode %q", rroMode)
 	}
+}
+
+func (kl *Kubelet) IsPodRunning(pod *v1.Pod) bool {
+	if !podutil.IsPodReady(pod) {
+		klog.Warningf("pod %v status is not ready", klog.KObj(pod))
+		return false
+	}
+
+	runtimeStatus, err := kl.containerRuntime.GetPodStatus(context.Background(), pod.UID, pod.Name, pod.Namespace)
+	if err != nil {
+		klog.ErrorS(err, "Get pod status from runtime falied", "pod", klog.KObj(pod), "podUID", pod.UID)
+		return false
+	}
+	for _, ss := range runtimeStatus.SandboxStatuses {
+		if ss.State != runtimeapi.PodSandboxState_SANDBOX_READY {
+			klog.Warningf("pod %v sandbox %s state is %s, is not ready", klog.KObj(pod), ss.Id, ss.State)
+			return false
+		}
+		klog.V(2).InfoS("pod sandbox state is ready", "pod", klog.KObj(pod), "sandbox id", ss.Id)
+	}
+	for _, cs := range runtimeStatus.ContainerStatuses {
+		if cs.State != kubecontainer.ContainerStateRunning {
+			klog.Warningf("pod %v container %s state is %s, is not running", klog.KObj(pod), cs.Name, cs.State)
+			return false
+		}
+		klog.V(2).InfoS("pod container state is running", "pod", klog.KObj(pod), "container", cs.Name)
+	}
+	klog.V(2).InfoS("pod is already running in runtime", "pod", klog.KObj(pod), "podUID", pod.UID)
+
+	return true
+}
+
+func IsPodLabeledRetain(pod *v1.Pod) bool {
+	if pod.Labels != nil && pod.Labels["pod.ccos.io/retain-running"] == "NodeAffinity" {
+		klog.V(2).InfoS("pod has retain label", "pod", klog.KObj(pod))
+		return true
+	}
+	return false
 }
